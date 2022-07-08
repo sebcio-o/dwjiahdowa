@@ -1,0 +1,89 @@
+version: '3.9'
+services:
+  backend:
+    build: ./backend
+    restart: always
+    container_name: "backend-app-dev"
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend/:/usr/src/app/
+    ports:
+      - 8000:8000
+    networks:
+      - dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./.env.dev
+    stdin_open: true
+    tty: true
+
+  frontend:
+    build: ./frontend
+    restart: always
+    container_name: "frontend-dev"
+    volumes:
+      - ./frontend:/app
+      - node-modules:/app/node_modules
+    networks:
+      - dev
+    ports:
+      - '3000:3000'
+    stdin_open: true
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - "backend"
+    command: npm start
+
+  db:
+    image: postgres:13.2
+    restart: always
+    container_name: "db-dev"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dev
+    environment:
+      - POSTGRES_USER=django
+      - POSTGRES_PASSWORD=django
+      - POSTGRES_DB=django_dev
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 1s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
+
+  smtp:
+    image: mailhog/mailhog
+    container_name: "smtp"
+    restart: always
+    logging:
+      driver: none
+    networks:
+      - dev
+    ports:
+      - 1025:1025
+      - 8025:8025
+
+  redis:
+    image: redis:7.0.2-alpine
+    container_name: 'collabo-dev-redis'
+    restart: always
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]  
+    networks:
+      - dev
+
+volumes:
+  postgres_data:
+  node-modules:
+
+networks:
+  dev:
